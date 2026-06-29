@@ -14,6 +14,17 @@ A local desktop GUI tool that performs deep website analysis for phishing detect
 
 <p align="center">
   <img src="screenshots/ui.png" alt="Phishing Analyzer GUI" width="80%">
+  <br><em>Analysis verdict card with collapsible results</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/full-window.png" alt="Full Window View" width="80%">
+  <br><em>Full window with all sections expanded</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/analysis-result.png" alt="Detailed Analysis Result" width="80%">
+  <br><em>Detailed AI analysis and threat intelligence findings</em>
 </p>
 
 ---
