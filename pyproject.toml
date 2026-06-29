@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "phishing-analyzer"
+version = "2.0.0"
+description = "AI-powered desktop GUI tool for deep website phishing analysis with static JS/CSS scanning, threat intelligence lookups, and OpenRouter model fallback."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Abdur Rahman Khan (Nova)", email = "abdurrahman@askcmmc.ai"}
+]
+keywords = [
+    "phishing", "security", "cybersecurity", "url-analysis", "threat-intelligence",
+    "openrouter", "ai", "tkinter", "whois", "virustotal", "phishtank"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: X11 Applications",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Internet :: WWW/HTTP",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.28.0",
+    "beautifulsoup4>=4.11.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI"
+Repository = "https://github.com/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI"
+Issues = "https://github.com/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI/issues"
+
+[project.scripts]
+phishing-analyzer = "phishing_analyzer_gui:main"
+
+[tool.setuptools]
+py-modules = ["url_scraper", "phishing_analyzer_gui"]

@@ -1,10 +1,21 @@
 # 🔍 Automated Phishing Analyzer — AI-Powered
 
+<p align="center">
+  <a href="https://github.com/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI/stargazers"><img src="https://img.shields.io/github/stars/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI?style=for-the-badge&color=f1c40f" alt="Stars"></a>
+  <a href="https://github.com/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI/blob/main/LICENSE"><img src="https://img.shields.io/github/license/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI?style=for-the-badge&color=blue" alt="License"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python"></a>
+  <img src="https://img.shields.io/badge/Version-2.0.0-green?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey?style=for-the-badge" alt="Platform">
+  <a href="https://github.com/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI/commits/main"><img src="https://img.shields.io/github/last-commit/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI?style=for-the-badge&color=blueviolet" alt="Last Commit"></a>
+</p>
+
 A local desktop GUI tool that performs deep website analysis for phishing detection. Downloads all page assets, runs static JS/CSS analysis, queries threat intelligence sources, and uses AI (OpenRouter / DeepSeek) with automatic model fallback to classify URLs as **SAFE**, **SUSPICIOUS**, or **PHISHING**.
 
 > **v2.0 — June 2026 Update:** Collapsible sections, persistent API key storage, OpenRouter free model selection with fallback, AI explanation display, plain-language verdicts, and Copy All.
 
-![URL Phishing Analyzer UI](screenshots/ui.png)
+<p align="center">
+  <img src="screenshots/ui.png" alt="Phishing Analyzer GUI" width="80%">
+</p>
 
 ---
 
@@ -54,6 +65,12 @@ cd Automated-Phishing-Analyzer-AI
 ```
 
 ### 2. Install dependencies
+
+```bash
+pip3 install -r requirements.txt
+```
+
+Or install directly:
 
 ```bash
 pip3 install requests beautifulsoup4 python-dotenv
@@ -133,13 +150,19 @@ OPENROUTER_MODEL=google/gemini-2.5-flash-lite:free
 .
 ├── phishing_analyzer_gui.py   # Desktop GUI (tkinter, dark theme)
 ├── url_scraper.py             # Scraping + AI analysis + heuristics
+├── bot.js                     # Discord bot for DM-based URL checking
+├── pyproject.toml             # Python package metadata
+├── requirements.txt           # Python dependencies
 ├── .api_keys                  # Saved API keys (base64, gitignored)
 ├── .gitignore
+├── .env.example               # Example environment file
 ├── scraped_sites/             # Analysis output per domain (gitignored)
 │   └── domain.com/
 │       ├── page.html
 │       ├── extracted_data.json
 │       └── analysis.json
+├── screenshots/
+│   └── ui.png
 └── README.md
 ```
 
