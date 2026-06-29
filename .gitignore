@@ -1,0 +1,13 @@
+node_modules/
+.env
+*.log
+.DS_Store
+.api_keys
+function.zip
+bot.zip
+__pycache__/
+*.pyc
+*.pyo
+scraped_sites/
+temp_proposal_text.txt
+proposal_output.txt
