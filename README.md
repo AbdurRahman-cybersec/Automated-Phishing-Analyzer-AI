@@ -1,8 +1,7 @@
 # 🔍 Automated Phishing Analyzer — AI-Powered
 
 <p align="center">
-  <a href="https://github.com/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI/stargazers"><img src="https://img.shields.io/github/stars/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI?style=for-the-badge&color=f1c40f" alt="Stars"></a>
-  <a href="https://github.com/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI/blob/main/LICENSE"><img src="https://img.shields.io/github/license/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI?style=for-the-badge&color=blue" alt="License"></a>
+  <a href="https://github.com/AbdurRahman-cybersec/Automated-Phishing-Analyzer-AI/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="MIT License"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python"></a>
   <img src="https://img.shields.io/badge/Version-2.0.0-green?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey?style=for-the-badge" alt="Platform">
