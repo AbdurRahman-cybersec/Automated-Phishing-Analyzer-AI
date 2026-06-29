@@ -13,11 +13,6 @@ A local desktop GUI tool that performs deep website analysis for phishing detect
 > **v2.0 — June 2026 Update:** Collapsible sections, persistent API key storage, OpenRouter free model selection with fallback, AI explanation display, plain-language verdicts, and Copy All.
 
 <p align="center">
-  <img src="screenshots/ui.png" alt="Phishing Analyzer GUI" width="80%">
-  <br><em>Analysis verdict card with collapsible results</em>
-</p>
-
-<p align="center">
   <img src="screenshots/full-window.png" alt="Full Window View" width="80%">
   <br><em>Full window with all sections expanded</em>
 </p>
@@ -172,7 +167,8 @@ OPENROUTER_MODEL=google/gemini-2.5-flash-lite:free
 │       ├── extracted_data.json
 │       └── analysis.json
 ├── screenshots/
-│   └── ui.png
+│   ├── full-window.png
+│   └── analysis-result.png
 └── README.md
 ```
 
