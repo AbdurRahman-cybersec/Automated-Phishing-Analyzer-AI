@@ -11,3 +11,7 @@ __pycache__/
 scraped_sites/
 temp_proposal_text.txt
 proposal_output.txt
+# Local reference files (not tracked)
+AWS_DEPLOYMENT_PLAN.md
+CHAT_SUMMARY_SHORT.txt
+SESSION_CHANGES_2026-06-30.txt
