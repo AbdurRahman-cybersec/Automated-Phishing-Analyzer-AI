@@ -18,17 +18,17 @@ A local desktop GUI tool that performs deep website analysis for phishing detect
 </p>
 
 <p align="center">
-  <img src="phishingresult1.png" alt="Phishing Analysis Result 1" width="95%">
+  <img src="screenshots/phishingresult1.png" alt="Phishing Analysis Result 1" width="95%">
   <br><em>Phishing analysis — result 1</em>
 </p>
 
 <p align="center">
-  <img src="phishingresult2.png" alt="Phishing Analysis Result 2" width="95%">
+  <img src="screenshots/phishingresult2.png" alt="Phishing Analysis Result 2" width="95%">
   <br><em>Phishing analysis — result 2</em>
 </p>
 
 <p align="center">
-  <img src="phishingresult3.png" alt="Phishing Analysis Result 3" width="95%">
+  <img src="screenshots/phishingresult3.png" alt="Phishing Analysis Result 3" width="95%">
   <br><em>Phishing analysis — result 3</em>
 </p>
 
@@ -179,7 +179,6 @@ OPENROUTER_MODEL=google/gemini-2.5-flash-lite:free
 .
 ├── phishing_analyzer_gui.py   # Desktop GUI (tkinter, dark theme)
 ├── url_scraper.py             # Scraping + AI analysis + heuristics
-├── bot.js                     # Discord bot for DM-based URL checking
 ├── pyproject.toml             # Python package metadata
 ├── requirements.txt           # Python dependencies
 ├── .api_keys                  # Saved API keys (base64, gitignored)
@@ -190,9 +189,17 @@ OPENROUTER_MODEL=google/gemini-2.5-flash-lite:free
 │       ├── page.html
 │       ├── extracted_data.json
 │       └── analysis.json
-├── screenshots/
+├── scripts/                   # Helper scripts
+│   ├── bot.js                 # Discord bot for DM-based URL checking
+│   ├── capture_page.js        # Puppeteer page screenshot capture
+│   └── test-openrouter.js     # OpenRouter API test
+├── docs/                      # Documentation
+│   └── FUTURE_PLAN.md         # Future development roadmap
+├── screenshots/               # UI screenshots
 │   ├── full-window.png
-│   └── analysis-result.png
+│   ├── phishingresult1.png
+│   ├── phishingresult2.png
+│   └── phishingresult3.png
 └── README.md
 ```
 

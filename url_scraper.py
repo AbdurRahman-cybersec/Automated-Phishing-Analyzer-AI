@@ -1132,11 +1132,11 @@ def capture_page_screenshot(url, domain_folder):
     }
 
     node_path = shutil.which('node')
-    helper_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'capture_page.js')
+    helper_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scripts', 'capture_page.js')
     browser_path = find_browser_executable()
 
     if not os.path.exists(helper_path):
-        result['error'] = 'capture_page.js helper is missing'
+        result['error'] = 'scripts/capture_page.js helper is missing'
         return result
 
     if not node_path:
