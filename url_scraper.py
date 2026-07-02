@@ -14,7 +14,10 @@ import ssl
 import socket
 import hashlib
 import sqlite3
+import shutil
+import subprocess
 import time
+import glob
 from datetime import datetime
 from urllib.parse import urlparse, urljoin
 
@@ -219,10 +222,16 @@ def download_asset(asset_url, folder, asset_type='js', timeout=10):
             local_path = os.path.join(folder, f"{base}_{counter}{ext}")
             counter += 1
 
-        with open(local_path, 'w', encoding='utf-8', errors='replace') as f:
-            f.write(resp.text)
+        if asset_type == 'img':
+            with open(local_path, 'wb') as f:
+                f.write(resp.content)
+            content = f"<binary:{len(resp.content)} bytes>"
+        else:
+            with open(local_path, 'w', encoding='utf-8', errors='replace') as f:
+                f.write(resp.text)
+            content = resp.text
 
-        return local_path, resp.text, None
+        return local_path, content, None
     except Exception as e:
         return None, None, str(e)[:120]
 
@@ -698,6 +707,10 @@ def analyze_redirect_chain(resp, original_url):
         'hop_count': 0,
         'cross_domain': False,
         'suspicious': False,
+        'redirected': False,
+        'original_url': original_url,
+        'final_url': None,
+        'final_domain': None,
         'reasons': [],
     }
 
@@ -705,10 +718,14 @@ def analyze_redirect_chain(resp, original_url):
         return result
 
     original_domain = urlparse(original_url).netloc
+    result['final_url'] = getattr(resp, 'url', original_url)
+    result['final_domain'] = urlparse(result['final_url']).netloc
     history = getattr(resp, 'history', [])
 
     if not history:
         return result
+
+    result['redirected'] = True
 
     prev_domain = original_domain
     for i, h in enumerate(history):
@@ -750,6 +767,65 @@ def analyze_redirect_chain(resp, original_url):
         )
 
     return result
+
+
+def analyze_vm_detection_signals(html, js_analyses=None, extra_js=None):
+    """
+    Detect page code that appears to check for headless browsers, automation,
+    virtualized environments, or sandbox instrumentation.
+    """
+    sources = [html or ""]
+    sources.extend(extra_js or [])
+    js_analyses = js_analyses or []
+
+    patterns = [
+        ('webdriver_check', r'navigator\s*\.\s*webdriver|["\']webdriver["\']',
+         'Checks navigator.webdriver, often used to detect browser automation'),
+        ('headless_check', r'HeadlessChrome|headless|__webdriver|__driver_evaluate|__selenium',
+         'Looks for headless browser or Selenium/WebDriver artifacts'),
+        ('automation_tool_check', r'puppeteer|playwright|selenium|phantomjs|nightmare',
+         'References common browser automation tools'),
+        ('plugin_fingerprint', r'navigator\s*\.\s*plugins|navigator\s*\.\s*mimeTypes',
+         'Fingerprints browser plugin/mimeType lists'),
+        ('webgl_fingerprint', r'WEBGL_debug_renderer_info|UNMASKED_VENDOR_WEBGL|UNMASKED_RENDERER_WEBGL',
+         'Fingerprints GPU/WebGL renderer details'),
+        ('hardware_fingerprint', r'navigator\s*\.\s*hardwareConcurrency|deviceMemory',
+         'Checks hardware characteristics that can reveal virtualized systems'),
+        ('language_timezone_fingerprint', r'Intl\.DateTimeFormat|resolvedOptions\s*\(|navigator\s*\.\s*languages',
+         'Checks language/timezone fingerprinting signals'),
+        ('canvas_fingerprint', r'toDataURL\s*\(|getImageData\s*\(|canvas fingerprint',
+         'Uses canvas fingerprinting signals'),
+        ('debugger_timing_check', r'\bdebugger\b|performance\s*\.\s*now\s*\(',
+         'May use timing/debugger checks for anti-analysis behavior'),
+        ('vm_keyword', r'virtualbox|vmware|qemu|hyper[-_ ]?v|sandbox|any\.run|browserling',
+         'References VM or sandbox environment names'),
+    ]
+
+    findings = []
+    seen = set()
+    combined = "\n".join(sources)
+    for finding_type, pattern, description in patterns:
+        matches = re.findall(pattern, combined, flags=re.IGNORECASE)
+        if matches and finding_type not in seen:
+            findings.append({
+                'type': finding_type,
+                'description': description,
+                'count': len(matches),
+            })
+            seen.add(finding_type)
+
+    score = min(sum(max(1, f['count']) for f in findings) * 8, 100)
+    return {
+        'suspicious': bool(findings),
+        'score': score,
+        'finding_count': len(findings),
+        'findings': findings[:12],
+        'summary': (
+            'Page code contains automation/VM/sandbox detection patterns.'
+            if findings else
+            'No obvious VM, sandbox, or browser automation detection patterns found.'
+        ),
+    }
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -888,7 +964,7 @@ class DomainReputationDB:
             ).fetchone()
             if not row:
                 return None
-            cols = [c[0] for c in conn.execute("PRAGMA table_info(domains)")]
+            cols = [c[1] for c in conn.execute("PRAGMA table_info(domains)")]
             data = dict(zip(cols, row))
             data['risk_scores'] = json.loads(data.get('risk_scores', '[]'))
             data['verdicts'] = json.loads(data.get('verdicts', '[]'))
@@ -908,7 +984,6 @@ class DomainReputationDB:
                 count = existing[0] + 1
                 scores = json.loads(existing[1])
                 scores.append(risk_score)
-                # Keep last 20 scores
                 scores = scores[-20:]
                 avg = sum(scores) / len(scores)
 
@@ -932,7 +1007,6 @@ class DomainReputationDB:
                 """, (domain, now, now, json.dumps([risk_score]), avg,
                       json.dumps([verdict]), tld, int(has_ssl), int(has_login)))
 
-            # Insert scan history
             conn.execute("""
                 INSERT INTO scan_history (domain, timestamp, risk_score, verdict, url, source)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -953,7 +1027,6 @@ class DomainReputationDB:
 
             results = []
             for r in rows:
-                # Get latest verdict
                 verdicts = conn.execute(
                     "SELECT verdicts FROM domains WHERE domain = ?", (r[0],)
                 ).fetchone()
@@ -997,6 +1070,117 @@ class DomainReputationDB:
                 'safe': safe,
                 'total_scans': total_scans,
             }
+
+
+def find_browser_executable():
+    """Return a usable Chrome/Chromium executable path if one can be found."""
+    env_path = os.getenv('BROWSER_PATH') or os.getenv('PUPPETEER_EXECUTABLE_PATH')
+    if env_path and os.path.isfile(env_path) and os.access(env_path, os.X_OK):
+        return env_path
+
+    executable_names = [
+        'google-chrome',
+        'google-chrome-stable',
+        'chromium',
+        'chromium-browser',
+        'chrome',
+        'msedge',
+        'microsoft-edge',
+    ]
+    for name in executable_names:
+        browser_path = shutil.which(name)
+        if browser_path:
+            return browser_path
+
+    home = os.path.expanduser('~')
+    candidate_paths = [
+        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/usr/local/bin/google-chrome',
+        '/usr/local/bin/chromium',
+        '/snap/bin/chromium',
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        os.path.join(home, '.cache', 'ms-playwright', 'chromium-*', 'chrome-linux*', 'chrome'),
+        os.path.join(home, '.cache', 'ms-playwright', 'chrome-*', 'chrome-linux*', 'chrome'),
+        os.path.join(home, '.cache', 'puppeteer', 'chrome', '*', 'chrome-linux*', 'chrome'),
+        os.path.join(home, '.local', 'share', 'flatpak', 'app', 'com.google.Chrome', '*', '*', 'active', 'files', 'extra', 'chrome'),
+        os.path.join(home, '.var', 'app', 'com.google.Chrome', 'config', 'google-chrome'),
+    ]
+
+    for pattern in candidate_paths:
+        for browser_path in glob.glob(pattern):
+            if os.path.isfile(browser_path) and os.access(browser_path, os.X_OK):
+                return browser_path
+
+    return None
+
+
+def capture_page_screenshot(url, domain_folder):
+    """
+    Best-effort screenshot capture using an external Node + puppeteer-core helper.
+    Returns metadata for GUI display even when capture is unavailable.
+    """
+    result = {
+        'enabled': False,
+        'captured': False,
+        'path': None,
+        'error': None,
+        'hint': None,
+    }
+
+    node_path = shutil.which('node')
+    helper_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'capture_page.js')
+    browser_path = find_browser_executable()
+
+    if not os.path.exists(helper_path):
+        result['error'] = 'capture_page.js helper is missing'
+        return result
+
+    if not node_path:
+        result['error'] = 'Node.js not installed'
+        result['hint'] = 'Install Node.js, run npm install, and set BROWSER_PATH to Chrome/Chromium.'
+        return result
+
+    if not browser_path:
+        result['error'] = 'No local Chrome/Chromium executable found'
+        result['hint'] = 'Install Chrome/Chromium or set BROWSER_PATH/PUPPETEER_EXECUTABLE_PATH to the browser executable.'
+        return result
+
+    output_path = os.path.join(domain_folder, 'page_preview.png')
+    env = dict(os.environ)
+    env['BROWSER_PATH'] = browser_path
+
+    try:
+        proc = subprocess.run(
+            [node_path, helper_path, url, output_path],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+        result['enabled'] = True
+        if proc.returncode == 0 and os.path.exists(output_path):
+            result['captured'] = True
+            result['path'] = output_path
+            return result
+
+        stderr = (proc.stderr or proc.stdout or '').strip()
+        result['error'] = stderr[:240] or f'screenshot helper exited with {proc.returncode}'
+        result['hint'] = 'Make sure npm dependencies are installed and BROWSER_PATH points to a working browser.'
+        return result
+    except subprocess.TimeoutExpired:
+        result['enabled'] = True
+        result['error'] = 'Screenshot capture timed out'
+        result['hint'] = 'Try again with a faster network or a working local browser.'
+        return result
+    except Exception as e:
+        result['enabled'] = True
+        result['error'] = str(e)[:240]
+        result['hint'] = 'Screenshot capture is optional; verify Node.js, npm packages, and BROWSER_PATH.'
+        return result
 
 
 # Global reputation DB instance
@@ -1415,6 +1599,7 @@ def save_to_folder(domain, html, extracted_data, asset_results=None,
                     js_analyses=None, css_analyses=None,
                     whois_data=None, ct_data=None, redirect_data=None,
                     vt_data=None, pt_data=None, favicon_data=None,
+                    screenshot_data=None,
                     reputation=None):
     """Save HTML, extracted data, and all analysis results to a domain-named folder."""
     folder = os.path.join(SCRAPED_DIR, domain)
@@ -1453,6 +1638,8 @@ def save_to_folder(domain, html, extracted_data, asset_results=None,
         data['_phishtank'] = pt_data
     if favicon_data:
         data['_favicon'] = favicon_data
+    if screenshot_data:
+        data['_page_preview'] = screenshot_data
     if reputation:
         data['_reputation'] = {
             'avg_risk': reputation.get('avg_risk'),
@@ -1901,6 +2088,94 @@ def ssl_info_valid(extracted_data):
     return extracted_data.get('ssl', {}).get('valid', False)
 
 
+def calibrate_final_analysis(analysis, heuristic, extracted_data, vt_data=None, pt_data=None,
+                             reputation=None):
+    """
+    Prevent AI from downgrading strong deterministic evidence.
+    External intel and obvious brand impersonation should raise the final verdict.
+    """
+    final = dict(analysis or heuristic or {})
+    reasons = list(final.get('reasons', []))
+    guardrail_reasons = []
+
+    vt_pos = (vt_data or {}).get('positives') or 0
+    vt_total = (vt_data or {}).get('total')
+    rep_avg = (reputation or {}).get('avg_risk') or 0
+    rep_scans = (reputation or {}).get('scan_count') or 0
+    title = (extracted_data or {}).get('title', '').lower()
+    domain = (extracted_data or {}).get('domain', '').lower()
+
+    brand_impersonation = False
+    for brand in TARGET_BRANDS:
+        official = {
+            'netflix': 'netflix.com',
+            'paypal': 'paypal.com',
+            'google': 'google.com',
+            'facebook': 'facebook.com',
+            'microsoft': 'microsoft.com',
+            'apple': 'apple.com',
+            'amazon': 'amazon.com',
+            'instagram': 'instagram.com',
+            'discord': 'discord.com',
+        }.get(brand, f'{brand}.com')
+        if brand in title and official not in domain:
+            brand_impersonation = True
+            guardrail_reasons.append(
+                f"Final calibration: page title/content impersonates '{brand}' but domain is '{domain}', not {official}"
+            )
+            break
+
+    if vt_pos >= 10:
+        guardrail_reasons.append(
+            f"Final calibration: VirusTotal has {vt_pos}/{vt_total or '?'} detections, which is high-confidence malicious evidence"
+        )
+    elif vt_pos >= 5:
+        guardrail_reasons.append(
+            f"Final calibration: VirusTotal has {vt_pos}/{vt_total or '?'} detections"
+        )
+
+    if rep_scans >= 3 and rep_avg >= 70:
+        guardrail_reasons.append(
+            f"Final calibration: local reputation has {rep_scans} scans with avg risk {rep_avg:.0f}/100"
+        )
+
+    min_score = int(final.get('risk_score') or heuristic.get('risk_score', 0) or 0)
+    force_phishing = False
+    if vt_pos >= 10:
+        min_score = max(min_score, 85)
+        force_phishing = True
+    elif vt_pos >= 5 and (brand_impersonation or rep_avg >= 60):
+        min_score = max(min_score, 80)
+        force_phishing = True
+    elif brand_impersonation and rep_scans >= 3 and rep_avg >= 70:
+        min_score = max(min_score, 78)
+        force_phishing = True
+    elif int(heuristic.get('risk_score', 0) or 0) >= 75:
+        min_score = max(min_score, int(heuristic.get('risk_score', 0)))
+        force_phishing = True
+
+    if force_phishing:
+        final['verdict'] = 'PHISHING'
+    elif min_score >= 45 and final.get('verdict') == 'SAFE':
+        final['verdict'] = 'SUSPICIOUS'
+
+    final['risk_score'] = max(int(final.get('risk_score') or 0), min_score)
+    final['confidence'] = max(int(final.get('confidence') or 0), min(95, final['risk_score'] + 10))
+
+    for reason in guardrail_reasons:
+        if reason not in reasons:
+            reasons.append(reason)
+    final['reasons'] = reasons[:12]
+
+    if guardrail_reasons:
+        prev_source = final.get('source', 'unknown')
+        final['source'] = f"{prev_source} + calibrated"
+        final['calibration_applied'] = True
+        final['calibration_reasons'] = guardrail_reasons
+
+    return final
+
+
 # ══════════════════════════════════════════════════════════════════
 #  OPENROUTER AI ANALYSIS (comprehensive prompt)
 # ══════════════════════════════════════════════════════════════════
@@ -2037,6 +2312,11 @@ Analyze this URL and all the above data for phishing indicators. Consider:
 8. Download errors — do they suggest the site is flagged/blocked?
 9. Iframes — are they loading content from suspicious sources?
 
+Important calibration rules:
+- If VirusTotal has 10 or more detections, classify as PHISHING unless there is overwhelming contrary evidence.
+- If the page impersonates a major brand but is not hosted on that brand's official domain, classify as PHISHING when combined with threat-intel detections or bad reputation.
+- Do not downgrade confirmed external threat-intel evidence to merely SUSPICIOUS because a login form is missing; phishing pages can be incomplete, staged, decoys, or credential capture can be added later.
+
 Respond ONLY in valid JSON format:
 {
   "verdict": "SAFE" or "PHISHING" or "SUSPICIOUS",
@@ -2058,7 +2338,12 @@ def analyze_with_ai(extracted_data, js_analyses=None, css_analyses=None, asset_r
     if provider == 'deepseek':
         if not DEEPSEEK_API_KEY:
             print("  ✗ DEEPSEEK_API_KEY not set — skipping AI analysis")
-            return None
+            return {
+                "error": "DEEPSEEK_API_KEY not set",
+                "provider": "DeepSeek",
+                "api_status": "skipped",
+                "api_name": "AI Analysis",
+            }
         api_key = DEEPSEEK_API_KEY
         models = [DEEPSEEK_MODEL]
         endpoint = 'https://api.deepseek.com/v1/chat/completions'
@@ -2067,7 +2352,12 @@ def analyze_with_ai(extracted_data, js_analyses=None, css_analyses=None, asset_r
     else:
         if not OPENROUTER_API_KEY:
             print("  ✗ OPENROUTER_API_KEY not set — skipping AI analysis")
-            return None
+            return {
+                "error": "OPENROUTER_API_KEY not set",
+                "provider": "OpenRouter",
+                "api_status": "skipped",
+                "api_name": "AI Analysis",
+            }
         api_key = OPENROUTER_API_KEY
         # Build model list: primary first, then fallbacks (deduped)
         models = [OPENROUTER_MODEL]
@@ -2120,6 +2410,9 @@ def analyze_with_ai(extracted_data, js_analyses=None, css_analyses=None, asset_r
             # Always include the raw text for GUI explanation display
             analysis['ai_explanation'] = result_text
             analysis['ai_model_used'] = model
+            analysis['provider'] = provider_label
+            analysis['api_status'] = 'worked'
+            analysis['api_name'] = 'AI Analysis'
             print(f"  ✓ Response from {model} ({len(result_text):,} chars)")
             return analysis
 
@@ -2150,7 +2443,12 @@ def analyze_with_ai(extracted_data, js_analyses=None, css_analyses=None, asset_r
 
     # All models failed
     print(f"  ✗ All models exhausted. Last error: {last_error}")
-    return {"error": last_error or "All AI models failed"}
+    return {
+        "error": last_error or "All AI models failed",
+        "provider": provider_label,
+        "api_status": "failed",
+        "api_name": "AI Analysis",
+    }
 
 
 def save_analysis(folder, analysis):
@@ -2325,8 +2623,10 @@ def analyze_url(url, progress_callback=None):
     # Step 5: Download all assets (JS, CSS, images)
     asset_results = None
     js_analyses = []
+    js_contents = []
     css_analyses = []
     favicon_data = None
+    screenshot_data = None
     redirect_data = None
 
     if html:
@@ -2348,10 +2648,19 @@ def analyze_url(url, progress_callback=None):
                 try:
                     with open(js_file['path'], 'r', encoding='utf-8', errors='replace') as f:
                         js_content = f.read()
+                    js_contents.append(js_content)
                     a = analyze_js_content(js_content, os.path.basename(js_file['path']))
                     js_analyses.append(a)
                 except Exception as e:
                     _status(f"  ⚠ JS analysis error: {e}")
+
+        _status("🧪  Checking for VM/sandbox detection code...")
+        vm_detection = analyze_vm_detection_signals(
+            html,
+            js_analyses,
+            extracted.get('inline_scripts', []) + js_contents,
+        )
+        extracted['_vm_detection'] = vm_detection
 
         # Static analysis of downloaded CSS
         css_files = asset_results['css']['downloaded']
@@ -2370,6 +2679,10 @@ def analyze_url(url, progress_callback=None):
         _status("🖼️  Analyzing favicon...")
         favicon_data = analyze_favicon(html, url, folder)
 
+        # Optional page screenshot capture
+        _status("🖥️  Capturing page preview (optional)...")
+        screenshot_data = capture_page_screenshot(url, folder)
+
     # Step 6: Redirect chain analysis
     _status("🔗  Analyzing redirect chain...")
     redirect_data = analyze_redirect_chain(resp, url)
@@ -2378,6 +2691,32 @@ def analyze_url(url, progress_callback=None):
     _status("🌐  Checking VirusTotal & PhishTank...")
     vt_data = check_virustotal(url)
     pt_data = check_phishtank(url)
+    api_status = {
+        'ai': {
+            'name': 'AI Analysis',
+            'provider': 'DeepSeek' if AI_PROVIDER == 'deepseek' else 'OpenRouter',
+            'status': 'pending',
+            'detail': 'Waiting for AI analysis',
+        },
+        'virustotal': {
+            'name': 'VirusTotal',
+            'provider': 'VirusTotal',
+            'status': 'failed' if vt_data.get('error') else 'worked',
+            'detail': vt_data.get('error') or f"{vt_data.get('positives', 0)}/{vt_data.get('total', '?')} engines flagged",
+        },
+        'phishtank': {
+            'name': 'PhishTank',
+            'provider': 'PhishTank',
+            'status': 'failed' if pt_data.get('error') else 'worked',
+            'detail': pt_data.get('error') or ('URL found in database' if pt_data.get('in_database') else 'URL not found in database'),
+        },
+        'screenshot': {
+            'name': 'Screenshot Capture',
+            'provider': 'Local Chrome/Chromium',
+            'status': 'worked' if screenshot_data and screenshot_data.get('captured') else ('failed' if screenshot_data and screenshot_data.get('error') else 'skipped'),
+            'detail': 'Preview captured' if screenshot_data and screenshot_data.get('captured') else ((screenshot_data or {}).get('error') or 'No screenshot attempted'),
+        },
+    }
 
     # Step 8: Reputation DB lookup
     _status("🗄️  Checking local reputation database...")
@@ -2390,7 +2729,7 @@ def analyze_url(url, progress_callback=None):
     folder = save_to_folder(domain, html or "<!-- download failed -->",
                             extracted, asset_results, js_analyses, css_analyses,
                             whois_data, ct_data, redirect_data,
-                            vt_data, pt_data, favicon_data, reputation)
+                            vt_data, pt_data, favicon_data, screenshot_data, reputation)
 
     # Step 10: Heuristic analysis (always runs, uses all data)
     _status("🔍  Running heuristic analysis (10 categories)...")
@@ -2399,37 +2738,26 @@ def analyze_url(url, progress_callback=None):
                                    vt_data, pt_data, favicon_data,
                                    reputation)
 
-    # Step 11: Record scan in reputation DB
-    tld = domain.rsplit('.', 1)[-1] if '.' in domain else ''
-    rep_db.record_scan(
-        domain=domain,
-        tld=tld,
-        risk_score=heuristic['risk_score'],
-        verdict=heuristic['verdict'],
-        has_ssl=extracted.get('ssl', {}).get('valid', False),
-        has_login=extracted.get('has_login_form', False),
-        url=url,
-        source='heuristic',
-    )
-
-    # Step 12: AI Analysis (overrides heuristic if available)
+    # Step 11: AI Analysis (overrides heuristic if available)
     _status("🤖  Calling AI model for comprehensive analysis...")
     ai_analysis = analyze_with_ai(extracted, js_analyses, css_analyses, asset_results)
+    if ai_analysis:
+        api_status['ai']['status'] = ai_analysis.get('api_status') or ('failed' if ai_analysis.get('error') else 'worked')
+        api_status['ai']['provider'] = ai_analysis.get('provider') or api_status['ai']['provider']
+        api_status['ai']['detail'] = (
+            f"Model: {ai_analysis.get('ai_model_used')}"
+            if api_status['ai']['status'] == 'worked' and ai_analysis.get('ai_model_used')
+            else ai_analysis.get('error', 'AI completed')
+        )
+    else:
+        api_status['ai']['status'] = 'skipped'
+        api_status['ai']['detail'] = 'No AI result returned'
     if ai_analysis:
         save_analysis(folder, ai_analysis)
 
     # AI overrides heuristic if it returned valid structured data
     if ai_analysis and 'error' not in ai_analysis and 'raw_response' not in ai_analysis:
         analysis = ai_analysis
-        # Also record AI verdict
-        rep_db.record_scan(
-            domain=domain, tld=tld,
-            risk_score=ai_analysis.get('risk_score', heuristic['risk_score']),
-            verdict=ai_analysis.get('verdict', heuristic['verdict']),
-            has_ssl=extracted.get('ssl', {}).get('valid', False),
-            has_login=extracted.get('has_login_form', False),
-            url=url, source='ai',
-        )
         analysis['source'] = 'ai'
     else:
         # Use heuristic as the primary result with AI error context
@@ -2441,6 +2769,29 @@ def analyze_url(url, progress_callback=None):
             analysis = dict(heuristic)
             analysis['ai_raw'] = ai_analysis['raw_response'][:300]
             analysis['source'] = 'heuristic (AI parse failed)'
+
+    analysis = calibrate_final_analysis(
+        analysis,
+        heuristic,
+        extracted,
+        vt_data=vt_data,
+        pt_data=pt_data,
+        reputation=reputation,
+    )
+
+    # Step 12: Record one final scan in the reputation DB
+    tld = domain.rsplit('.', 1)[-1] if '.' in domain else ''
+    rep_db.record_scan(
+        domain=domain,
+        tld=tld,
+        risk_score=analysis.get('risk_score', heuristic['risk_score']),
+        verdict=analysis.get('verdict', heuristic['verdict']),
+        has_ssl=extracted.get('ssl', {}).get('valid', False),
+        has_login=extracted.get('has_login_form', False),
+        url=url,
+        source=analysis.get('source', 'heuristic'),
+    )
+    reputation = rep_db.get_reputation(domain)
 
     # Always save the effective analysis
     save_analysis(folder, analysis)
@@ -2457,7 +2808,15 @@ def analyze_url(url, progress_callback=None):
     extracted['_virustotal'] = vt_data or {}
     extracted['_phishtank'] = pt_data or {}
     extracted['_favicon'] = favicon_data or {}
+    extracted['_page_preview'] = screenshot_data or {}
     extracted['_reputation'] = reputation or {}
+    extracted['_api_status'] = api_status
+
+    # Refresh saved extracted data so the final reputation snapshot is accurate.
+    save_to_folder(domain, html or "<!-- download failed -->",
+                   extracted, asset_results, js_analyses, css_analyses,
+                   whois_data, ct_data, redirect_data,
+                   vt_data, pt_data, favicon_data, screenshot_data, reputation)
 
     _status(f"✅  Analysis complete — saved to {folder}/")
 

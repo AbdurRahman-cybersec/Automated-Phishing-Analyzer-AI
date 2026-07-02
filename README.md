@@ -40,11 +40,13 @@ A local desktop GUI tool that performs deep website analysis for phishing detect
 - **Dark theme** — GitHub-inspired color palette
 - **Verdict card** with colored badge, risk score, confidence, and source tag
 - **Plain-language explanation** — AI summarizes the verdict in simple terms anyone can understand
+- **Responsive result layout** — wrapped content and improved spacing to avoid overlap on narrower windows
 - **Collapse/Expand sections** — Click any section header to show or hide it (▶ / ▼)
 - **Persistent API keys** — Keys are saved locally (base64-encoded, not plaintext) so you don't re-enter them
 - **Delete individual keys** — ✕ button on each key row to remove and replace
 - **Model selection** — Choose from 3 free OpenRouter models; if one fails, the next is tried automatically
 - **AI Analysis Result** — View the AI's full response text in a dedicated section
+- **Website Preview section** — Shows a saved screenshot when optional screenshot capture is configured
 - **Copy All** (📋) — One-click copy of the entire analysis to clipboard
 - **Scrollbar** — Full mousewheel and click-drag scrolling for long results
 
@@ -94,6 +96,18 @@ python3 phishing_analyzer_gui.py
 ```
 
 Paste your API key into the **🔑 API Keys** panel (expand by clicking the header), select a model from the dropdown, and click **Apply All Keys**. Your key is saved and will be loaded automatically next time.
+
+### Optional: enable page screenshots in the GUI
+
+The GUI can display a saved screenshot of the analyzed site in the **Website Preview** section, but screenshot capture needs a local browser runtime. The analyzer auto-detects common Chrome/Chromium installs, including Playwright/Puppeteer browser caches. If detection fails, set `BROWSER_PATH` manually.
+
+```bash
+npm install
+# Optional, only if Chrome/Chromium is not auto-detected:
+# export BROWSER_PATH=/path/to/chrome-or-chromium
+```
+
+When `node`, `puppeteer-core`, and a local Chrome/Chromium executable are available, the analyzer saves `page_preview.png` inside the domain folder and shows it in the GUI.
 
 ---
 

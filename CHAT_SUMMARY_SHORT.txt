@@ -1,0 +1,48 @@
+Automated Phishing Analyzer — Short Chat Summary
+
+Project context:
+- Current app is a Python/Tkinter phishing analyzer with url_scraper.py backend.
+- It analyzes URLs, downloads assets, checks WHOIS/CT/VirusTotal/PhishTank, runs AI, captures screenshots, and shows GUI results.
+
+Main fixes/features completed:
+- Fixed screenshot capture by auto-detecting Chrome/Chromium instead of requiring BROWSER_PATH.
+- Added safer Chromium launch flags and verified screenshot capture works outside the restricted shell sandbox.
+- Enlarged website preview images in the GUI.
+- Added dark mode toggle.
+- Added hover glow on clickable buttons.
+- Removed the Explain/Setup panel after request.
+- Changed main button text from "Primary Analyze" to "Analyze URL".
+- Added clickable screenshot preview that opens a zoom window.
+- Fixed preview zoom window with scrollbars, Zoom In, Zoom Out, and Reset.
+- Added bottom-left circular "?" button explaining screenshot capture safety.
+- Improved screenshot safety popup with scrollable layout, VM/Docker/Kali USB recommendations, and safety bars.
+- Removed header "///" decoration.
+- Added redirect reporting with hop count, final URL, and redirect details.
+- Added VM/sandbox/automation detection signals.
+- Split Redirects and VM/Sandbox Detection into separate report sections.
+- Added API Status section showing which services worked, failed, or skipped.
+- Added VS Code-style AI Analysis JSON rendering.
+- Fixed AI JSON renderer overlap/cramped layout.
+- Fixed final verdict downgrade issue by adding calibration guardrails so AI cannot downgrade strong deterministic evidence.
+
+Important scoring fix:
+- DeepSeek returned SUSPICIOUS 65/100 for a Netflix phishing page on GitHub Pages.
+- VirusTotal showed 17/92 detections and local reputation avg risk was 74/100.
+- Added final calibration so this pattern becomes PHISHING 85/100+.
+
+Spline discussion:
+- Spline iframe/.spline/.splinecode cannot be directly used as a Tkinter background.
+- Best options are export image/video for Tkinter or move to web UI for interactive Spline.
+
+Documents created:
+- FUTURE_PLAN.md
+  - Roadmap for verdict hardening, brand impersonation, screenshot analysis, isolation, redirects, report export, IOC extraction, history, threat intel feeds, GUI improvements, CLI, and tests.
+- AWS_DEPLOYMENT_PLAN.md
+  - Detailed AWS deployment plan covering EC2, FastAPI, ECS/Fargate, S3, DynamoDB, SQS, Secrets Manager, Docker, API design, worker flow, security, Discord bot deployment, and migration phases.
+
+Recommended next work:
+1. Add dedicated Brand Impersonation section.
+2. Add report export to Markdown/PDF/JSON.
+3. Add IOC extraction.
+4. Add scan history/case management.
+5. Start AWS prep by extracting backend into CLI/FastAPI-compatible scan function.
