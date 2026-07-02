@@ -18,11 +18,6 @@ A local desktop GUI tool that performs deep website analysis for phishing detect
 </p>
 
 <p align="center">
-  <img src="screenshots/analysis-result.png" alt="Detailed Analysis Result" width="95%">
-  <br><em>Detailed AI analysis and threat intelligence findings</em>
-</p>
-
-<p align="center">
   <img src="phishingresult1.png" alt="Phishing Analysis Result 1" width="95%">
   <br><em>Phishing analysis — result 1</em>
 </p>
