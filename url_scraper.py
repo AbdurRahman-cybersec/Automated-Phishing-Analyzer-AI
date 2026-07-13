@@ -48,16 +48,19 @@ except ImportError:
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
-OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'google/gemini-2.5-flash-lite:free')
+OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'google/gemini-2.5-flash-lite')
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
 DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek-chat')
 AI_PROVIDER = os.getenv('AI_PROVIDER', 'openrouter')  # 'openrouter' or 'deepseek'
 
-# Top 3 OpenRouter free models (used for fallback if primary fails)
+# Top 3 OpenRouter models (used for fallback if primary fails)
+# NOTE: :free suffixed models were deprecated by OpenRouter — using non-free slugs.
+# Costs are ~$0.30-0.40/1M tokens (fractions of a cent per analysis).
 OPENROUTER_FREE_MODELS = [
-    'google/gemini-2.5-flash-lite:free',
-    'meta-llama/llama-4-maverick:free',
-    'deepseek/deepseek-chat-v3-0324:free',
+    'openai/gpt-oss-120b:free',
+    'google/gemini-2.5-flash-lite',
+    'meta-llama/llama-4-maverick',
+    'deepseek/deepseek-chat-v3-0324',
 ]
 
 
